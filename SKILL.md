@@ -30,9 +30,11 @@ description: This skill should be used when generating enterprise training, onbo
 - 带颜色/色块的流程图或时间轴：**必须按颜色范围框界定的时间区间判定事件归属**，绝不能仅看文字紧邻哪个日期圆圈（典型误判：把粉色范围框归6日的活动错判到28日）
 
 ### 第3步：解析试题模板
-- 加载 `references/question_templates.md`，确认五类题型的精确格式
+- **首先加载 `references/sample_output.txt`（黄金标准样例），逐行对照理解正确输出长什么样**
+- 然后加载 `references/question_templates.md`，确认五类题型的精确格式规范
 - 每题含：题干、选项/答案、解析、难易度、分数；填空含填空项；简答含正确答案/考核点
-- 若用户提供自定义模板，以其为准；否则严格沿用 `references/question_templates.md`
+- 若用户提供自定义模板，以其为准；否则严格沿用 `references/question_templates.md` + `references/sample_output.txt`
+- **⛔ 格式红线**：绝对禁止输出"试卷式"格式（答案速查表 + 逐题解析分离），必须每题自含（题干+选项+答案+解析+难易度+分数 全在一起）
 
 ### 第4步：确定试题要求
 - 与用户确认或默认以下参数：
@@ -44,6 +46,7 @@ description: This skill should be used when generating enterprise training, onbo
 
 ### 第5步：出试题
 - **以"事实清单"为唯一事实源**，每道题只引用已核实的原文事实，禁止凭记忆或推断
+- **严格按 `sample_output.txt` 的格式输出**：每道题自含（题型标记+题干(答案)+选项+解析+难易度+分数），用空行分隔
 - 打乱选项顺序后再标注答案字母；答案字母必须指向正确选项
 - 解析文字必须与所标答案一致（解析中出现的关键词/数值/列表应出现在正确选项中）
 - 数字、日期、流程顺序逐字照原文，不可简化或"合并"（典型错误：把两个不同等级的系数/日期合并成一个值）
@@ -65,6 +68,7 @@ description: This skill should be used when generating enterprise training, onbo
 - 通过 `present_files` 交付最终题库文件
 
 ## Resources
-- `references/question_templates.md` — 五类题型格式与示例
-- `references/pitfalls_and_checks.md` — 高风险点核查清单与读图方法论
+- `references/sample_output.txt` — **⭐ 黄金标准输出样例（必读，优先级最高）**，含正确格式、格式要点对照表、禁止格式示例
+- `references/question_templates.md` — 五类题型格式规范与模板定义
+- `references/pitfalls_and_checks.md` — 高风险点核查清单与读图方法论（含五类错误模式）
 - `scripts/consistency_check.py` — 题库答案/选项/解析一致性自动校验
