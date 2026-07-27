@@ -30,10 +30,11 @@ description: This skill should be used when generating enterprise training, onbo
 - 带颜色/色块的流程图或时间轴：**必须按颜色范围框界定的时间区间判定事件归属**，绝不能仅看文字紧邻哪个日期圆圈（典型误判：把粉色范围框归6日的活动错判到28日）
 
 ### 第3步：解析试题模板
-- **首先加载 `references/sample_output.txt`（黄金标准样例），逐行对照理解正确输出长什么样**
-- 然后加载 `references/question_templates.md`，确认五类题型的精确格式规范
+- **首先加载 `references/canonical_format.md`（权威格式规范，唯一标准），逐行对照理解正确输出长什么样**
+- 然后加载 `references/sample_output.txt`（黄金标准样例，5 类题型正确范例）与 `references/question_templates.md`（题型结构补充）佐证
+- 标准格式为**紧凑单行式**：答案置于题干后中文圆括号内，选项空格分隔同行，末尾带 解析/难易度/分数（填空额外带 填空N/考核点）
 - 每题含：题干、选项/答案、解析、难易度、分数；填空含填空项；简答含正确答案/考核点
-- 若用户提供自定义模板，以其为准；否则严格沿用 `references/question_templates.md` + `references/sample_output.txt`
+- 若用户提供自定义模板，以其为准；否则严格沿用 `references/canonical_format.md`
 - **⛔ 格式红线**：绝对禁止输出"试卷式"格式（答案速查表 + 逐题解析分离），必须每题自含（题干+选项+答案+解析+难易度+分数 全在一起）
 
 ### 第4步：确定试题要求（⚠️ 强制确认 Gate —— 未获明确确认，严禁进入第5步）
@@ -41,13 +42,16 @@ description: This skill should be used when generating enterprise training, onbo
 **本步骤是出题前的强制确认门槛。AI 不得擅自以"默认值"跳过确认直接出题。必须先把以下确认项汇总呈现给用户，待用户明确回复"确认/可以出题"后，才允许进入第5步。** 若用户回复模糊、只给材料没表态、或漏确认某项，AI 必须停下等待，不得擅自动手。
 
 #### 确认项 1：试题格式（必须显式确认，二选一）
-- **方案 A（推荐，默认）**：采用本 skill 标准题库格式 —— 每题自含（题型标记 + 题干(答案字母) + 选项 + 解析 + 难易度 + 分数），按模块用 `========== 模块名 题数 ==========` 分隔。以 `references/sample_output.txt` 为唯一正确范本。
+- **方案 A（推荐，默认）**：采用本 skill 标准题库格式 —— 每题自含（题型标记 + 题干(答案字母) + 选项 + 解析 + 难易度 + 分数），**紧凑单行式**：答案置于题干后中文圆括号内，选项空格分隔同行，末尾带 解析/难易度/分数。以 `references/canonical_format.md` 为唯一正确范本（详见该文件 5 类题型样例）。
 - **方案 B**：用户自有格式 —— 用户必须提供模板样本，AI 严格对齐，不得自行发挥。
 
-> 呈现示例：
-> 请确认试题格式：
-> □ 采用 skill 标准题库格式（每题自含答案+解析，可导入考试系统）
-> □ 使用你提供的自定义格式（请附样本）
+> 呈现示例（直接把 canonical_format.md 的格式展示给用户并询问）：
+> 接下来出的题，是否都采用以下格式？
+> - 单选/多选/判断/填空/简答 五类
+> - 答案置于题干后括号内（如（C）/（BEFG）/（正确））
+> - 选项空格分隔、同行
+> - 末尾带 解析 + 难易度 + 分数（填空另带 填空N + 考核点）
+> □ 是，按这个格式出　　□ 否，我用自己的格式（附样本）
 
 #### 确认项 2：题型与数量（必须显式确认）
 向用户确认要出哪些题型及各自题量（常用：单选/多选/判断；可扩展：填空/简答）：
@@ -70,7 +74,7 @@ description: This skill should be used when generating enterprise training, onbo
 
 ### 第5步：出试题
 - **以"事实清单"为唯一事实源**，每道题只引用已核实的原文事实，禁止凭记忆或推断
-- **严格按 `sample_output.txt` 的格式输出**：每道题自含（题型标记+题干(答案)+选项+解析+难易度+分数），用空行分隔
+- **严格按 `canonical_format.md` 的格式输出**：每道题自含（题型标记+题干(答案括号内)+选项空格分隔同行+解析+难易度+分数），用空行分隔
 - 打乱选项顺序后再标注答案字母；答案字母必须指向正确选项
 - 解析文字必须与所标答案一致（解析中出现的关键词/数值/列表应出现在正确选项中）
 - 数字、日期、流程顺序逐字照原文，不可简化或"合并"（典型错误：把两个不同等级的系数/日期合并成一个值）
@@ -92,7 +96,8 @@ description: This skill should be used when generating enterprise training, onbo
 - 通过 `present_files` 交付最终题库文件
 
 ## Resources
-- `references/sample_output.txt` — **⭐ 黄金标准输出样例（必读，优先级最高）**，含正确格式、格式要点对照表、禁止格式示例
-- `references/question_templates.md` — 五类题型格式规范与模板定义
+- `references/canonical_format.md` — **⭐ 权威格式规范（必读，优先级最高）**，5 类题型紧凑单行标准格式 + 出题前确认闸门
+- `references/sample_output.txt` — 黄金标准样例（5 类题型正确范例）+ 格式要点对照表 + 禁止格式示例
+- `references/question_templates.md` — 五类题型结构补充说明
 - `references/pitfalls_and_checks.md` — 高风险点核查清单与读图方法论（含五类错误模式）
 - `scripts/consistency_check.py` — 题库答案/选项/解析一致性自动校验
