@@ -12,6 +12,11 @@ consistency_check.py — 题库答案/选项/解析一致性校验
     3. 提取"解析："文字，做一致性启发式检查
     4. 输出疑似矛盾报告（含文件名、行号、题目、标注答案、诊断）
 
+支持两种题目格式:
+    - 旧式（多行选项）：选项逐行，可带/不带 A./B. 前缀
+    - 紧凑式（单行选项）：【单选题】题干（A）opt1 opt2 opt3 opt4 解析：……
+      选项空格分隔、与题目同行，位于答案括号与"解析："之间
+
 检查项:
     A. 答案字母越界（指向不存在的选项）
     B. 排除题("不包括/不属于/不是/错误的是")：答案选项不应出现在解析正向陈述中
@@ -70,19 +75,38 @@ def extract_answer(qtype, tail):
     return None, None
 
 
-def collect_options(block):
-    """收集选项行与解析文字（忽略 解析/难易度/分数/考核点 行）"""
+def collect_options(block, tail=''):
+    """收集选项文字与解析文字。
+
+    支持两种格式：
+      - 旧式（多行选项）：选项逐行（无前缀或 A./B. 前缀）
+      - 紧凑式（单行选项）：选项空格分隔、与题目同行，
+        位于「答案括号」与「解析：」之间，如
+        【单选题】题干（A）opt1 opt2 opt3 opt4 解析：……
+    """
     opts = []
     expl = ''
+    # —— 紧凑式：选项在 tail 的「答案括号」与「解析：」之间 ——
+    m = re.search(r'[）)]\s*(.*?)\s*解析[:：]', tail)
+    if m:
+        seg = m.group(1).strip()
+        if seg:
+            opts = [x for x in re.split(r'\s+', seg) if x]
+    # —— 旧式：多行选项 ——
     for l in block[1:]:
         ls = l.strip()
-        if ls.startswith('解析：'):
-            expl = ls[3:].strip()
+        if ls.startswith('解析') or ls.startswith('解析：'):
+            expl = ls.split('：', 1)[1].strip() if '：' in ls else ls[2:].strip()
             continue
-        if ls.startswith('难易度：') or ls.startswith('分数：') or ls.startswith('考核点：'):
+        if ls.startswith('难易度') or ls.startswith('分数') or ls.startswith('考核点'):
             continue
         if ls:
             opts.append(ls)
+    # —— 解析文字（紧凑式常在 tail 末尾）——
+    if not expl:
+        me = re.search(r'解析[:：](.*?)(?:难易度[:：]|$)', tail)
+        if me:
+            expl = me.group(1).strip()
     return opts, expl
 
 
@@ -103,7 +127,7 @@ def check(q):
     if not ans_letters:
         issues.append('未识别到答案字母')
         return issues
-    opts, expl = collect_options(q['block'])
+    opts, expl = collect_options(q['block'], q['tail'])
     lmap = letter_map(opts)
     if any(ch not in lmap for ch in ans_letters):
         issues.append('答案字母 %s 超出选项范围 (实际选项: %s)'
