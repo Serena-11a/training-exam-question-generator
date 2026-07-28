@@ -12,14 +12,15 @@ consistency_check.py — 题库答案/选项/解析一致性校验
     3. 提取"解析："文字，做一致性启发式检查
     4. 输出疑似矛盾报告（含文件名、行号、题目、标注答案、诊断）
 
-支持四种题目格式:
-    - 旧式（多行选项）：选项逐行，可带/不带 A./B. 前缀
+支持的题目格式（选项部分）:
+    - 当前标准（题目首行+选项逐行，无前缀）：【题型】题干（A） / 选项文字一行 / 选项文字二行 / 解析：…… / 难易度：
+      每个选项单独一行，不带 A./B./C. 序号前缀，直接写选项文字
+    - 旧式（多行选项带 A./B. 前缀）：选项逐行，可带 A./B. 前缀（脚本会自动剥离前缀便于比对）
     - 紧凑式（单行）：【单选题】题干（A）opt1 opt2 opt3 opt4 解析：…… 难易度： 分数：
       选项空格分隔、与题目同行，位于答案括号与"解析："之间
     - 题干单行+字段分行式：【题型】题干（A）opt1 opt2 ……  /  解析：……  /  难易度：  /  分数：
       选项与题目同行，解析/难易度/分数各占一行
-    - 题目首行+选项逐行式：【题型】题干（A）  /  A. opt1  /  B. opt2  /  解析：……  /  难易度：
-      第一行只含题干与答案，选项各占一行带 A./B. 前缀，无分数/考核点字段
+填空题特殊：填空N：答案|备选 写在题干同行，并额外带 分数、考核点 行。
 
 检查项:
     A. 答案字母越界（指向不存在的选项）
@@ -79,37 +80,40 @@ def extract_answer(qtype, tail):
     return None, None
 
 
-def collect_options(block, tail=''):
+def collect_options(block, tail='', qtype=''):
     """收集选项文字与解析文字。
 
-    支持四种格式：
-      - 旧式（多行选项）：选项逐行（无前缀或 A./B. 前缀）
-      - 紧凑式（单行）：选项空格分隔、与题目同行，位于「答案括号」与「解析：」之间
-      - 题干单行+字段分行式：选项与题目同行，「解析：/难易度：/分数：」各占一行
-      - 题目首行+选项逐行式：第一行只含题干+答案，选项各占一行带 A./B. 前缀，无分数/考核点
+    支持的格式：
+      - 当前标准（题目首行+选项逐行，无 A./B. 前缀）：选项各行直接写文字，位于题干行与解析行之间
+      - 旧式（多行选项带 A./B. 前缀）：选项各占一行带编号，脚本自动剥离行首前缀
+      - 紧凑式（单行）/ 分行式：选项与题目同行，位于「答案括号」与「解析：」之间
+      - 填空/判断/简答：无选项行
     选项文字会统一剥去行首的 "A. " / "B. " 等编号前缀，便于一致性比对。
     """
     opts = []
     expl = ''
-    # —— 选项在「答案括号」之后（紧凑式/分行式，选项与题目同行）——
-    m = re.search(r'[）)]\s*(.*)', tail)
-    if m:
-        seg = m.group(1).strip()
-        mj = re.search(r'解析[:：]', seg)
-        if mj:
-            seg = seg[:mj.start()].strip()
-        if seg:
-            opts = [x for x in re.split(r'\s+', seg) if x]
-    # —— 多行部分：解析/难易度/分数/考核点/填空 跳过，其余按选项行处理 ——
+    # —— 同行选项（兼容旧紧凑/分行格式）——
+    if qtype in ('单选题', '多选题'):
+        m = re.search(r'[）)]\s*(.*)', tail)
+        if m:
+            seg = m.group(1).strip()
+            mj = re.search(r'解析[:：]', seg)
+            if mj:
+                seg = seg[:mj.start()].strip()
+            if seg and not seg.startswith('填空') \
+                    and not seg.startswith(('解析', '难易度', '分数', '考核点')):
+                opts = [x for x in re.split(r'\s+', seg)
+                        if x and not x.startswith(('解析', '难易度', '分数', '考核点', '填空'))]
+    # —— 多行部分（当前标准：选项逐行，无前缀）——
     for l in block[1:]:
         ls = l.strip()
         if ls.startswith('解析'):
             expl = ls.split('：', 1)[1].strip() if '：' in ls else ls[2:].strip()
             continue
-        if ls.startswith(('难易度', '分数', '考核点', '填空')):
+        if ls.startswith(('难易度', '分数', '考核点', '填空', '【')):
             continue
-        if ls:
-            # 剥去行首编号前缀：A. B. C. 或 A． A、 等
+        if ls and qtype in ('单选题', '多选题'):
+            # 剥去行首编号前缀：A. B. C. 或 A． A、 等（兼容旧格式）
             ls2 = re.sub(r'^[A-Za-z][.．、]\s*', '', ls)
             opts.append(ls2)
     # —— 解析文字（紧凑式常在 tail 末尾）——
@@ -118,6 +122,16 @@ def collect_options(block, tail=''):
         if me:
             expl = me.group(1).strip()
     return opts, expl
+
+
+def extract_fill_answers(tail):
+    """从填空题题干行提取 填空N：答案|备选 的主答案（| 之前部分）。"""
+    ans = []
+    for m in re.finditer(r'填空\d+[：:]\s*([^ 填空]+?)(?:\s*(?:填空\d)|$)', tail):
+        primary = m.group(1).split('|')[0].strip()
+        if primary:
+            ans.append(primary)
+    return ans
 
 
 def letter_map(options):
@@ -131,13 +145,27 @@ def split_items(s):
 def check(q):
     issues = []
     qtype = q['qtype']
+    if qtype == '填空题':
+        fills = extract_fill_answers(q['tail'])
+        expl = ''
+        for l in q['block'][1:]:
+            ls = l.strip()
+            if ls.startswith('解析'):
+                expl = ls.split('：', 1)[1].strip() if '：' in ls else ls[2:].strip()
+        if fills and expl:
+            for fa in fills:
+                if fa not in expl:
+                    issues.append('填空答案「%s」未在解析中出现，请核对' % fa[:30])
+        return issues
+    if qtype == '判断题':
+        return issues  # 判断题无选项，仅做格式层面人工核对
     if qtype not in ('单选题', '多选题'):
-        return issues  # 判断题/填空/简答此处仅做基础解析检查（可扩展）
+        return issues  # 简答题等暂不做一致性比对
     ans_letters, _ = extract_answer(qtype, q['tail'])
     if not ans_letters:
         issues.append('未识别到答案字母')
         return issues
-    opts, expl = collect_options(q['block'], q['tail'])
+    opts, expl = collect_options(q['block'], q['tail'], qtype)
     lmap = letter_map(opts)
     if any(ch not in lmap for ch in ans_letters):
         issues.append('答案字母 %s 超出选项范围 (实际选项: %s)'
