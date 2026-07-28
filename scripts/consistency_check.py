@@ -12,10 +12,12 @@ consistency_check.py — 题库答案/选项/解析一致性校验
     3. 提取"解析："文字，做一致性启发式检查
     4. 输出疑似矛盾报告（含文件名、行号、题目、标注答案、诊断）
 
-支持两种题目格式:
+支持三种题目格式:
     - 旧式（多行选项）：选项逐行，可带/不带 A./B. 前缀
-    - 紧凑式（单行选项）：【单选题】题干（A）opt1 opt2 opt3 opt4 解析：……
+    - 紧凑式（单行）：【单选题】题干（A）opt1 opt2 opt3 opt4 解析：…… 难易度： 分数：
       选项空格分隔、与题目同行，位于答案括号与"解析："之间
+    - 题干单行+字段分行式：【题型】题干（A）opt1 opt2 ……  /  解析：……  /  难易度：  /  分数：
+      选项与题目同行，解析/难易度/分数各占一行
 
 检查项:
     A. 答案字母越界（指向不存在的选项）
@@ -78,27 +80,30 @@ def extract_answer(qtype, tail):
 def collect_options(block, tail=''):
     """收集选项文字与解析文字。
 
-    支持两种格式：
+    支持三种格式：
       - 旧式（多行选项）：选项逐行（无前缀或 A./B. 前缀）
-      - 紧凑式（单行选项）：选项空格分隔、与题目同行，
-        位于「答案括号」与「解析：」之间，如
-        【单选题】题干（A）opt1 opt2 opt3 opt4 解析：……
+      - 紧凑式（单行）：选项空格分隔、与题目同行，位于「答案括号」与「解析：」之间
+      - 题干单行+字段分行式：选项与题目同行，「解析：/难易度：/分数：」各占一行
     """
     opts = []
     expl = ''
-    # —— 紧凑式：选项在 tail 的「答案括号」与「解析：」之间 ——
-    m = re.search(r'[）)]\s*(.*?)\s*解析[:：]', tail)
+    # —— 选项在「答案括号」之后 ——
+    # 紧凑式：同行含 解析，截断到 解析 之前；分行式：该行只有「题干+选项」，整段即选项
+    m = re.search(r'[）)]\s*(.*)', tail)
     if m:
         seg = m.group(1).strip()
+        mj = re.search(r'解析[:：]', seg)
+        if mj:
+            seg = seg[:mj.start()].strip()
         if seg:
             opts = [x for x in re.split(r'\s+', seg) if x]
-    # —— 旧式：多行选项 ——
+    # —— 多行部分：解析/难易度/分数/考核点/填空 跳过，其余按旧式选项 ——
     for l in block[1:]:
         ls = l.strip()
-        if ls.startswith('解析') or ls.startswith('解析：'):
+        if ls.startswith('解析'):
             expl = ls.split('：', 1)[1].strip() if '：' in ls else ls[2:].strip()
             continue
-        if ls.startswith('难易度') or ls.startswith('分数') or ls.startswith('考核点'):
+        if ls.startswith(('难易度', '分数', '考核点', '填空')):
             continue
         if ls:
             opts.append(ls)
