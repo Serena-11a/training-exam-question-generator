@@ -24,6 +24,10 @@ consistency_check.py — 题库答案/选项/解析一致性校验
 简答题特殊：用 正确答案： 代替 解析：，无解析行，带 分数 行。
 
 检查项:
+    ▲ 格式合规（结构层，先于内容检查）：
+       - 填空题 填空N 须单独成行（不可挤在题干同行）、且须含 解析/难易度/分数、不可含 考核点
+       - 简答题 须用「正确答案」且不可含「解析」、须含 难易度/分数、不可含 考核点
+       - 单选/多选/判断 不可含 分数/考核点、须含 解析/难易度
     A. 答案字母越界（指向不存在的选项）
     B. 排除题("不包括/不属于/不是/错误的是")：答案选项不应出现在解析正向陈述中
     C. 非排除题：若解析中完整出现某"非答案"选项内容、而"答案"选项内容未出现 → 标记"答案与解析矛盾"
@@ -153,12 +157,70 @@ def letter_map(options):
     return {chr(ord('A') + idx): opt for idx, opt in enumerate(options)}
 
 
+def _has_field(block, prefix):
+    """block 中是否存在以 prefix 开头的字段行（如 '解析' / '分数' / '考核点'）。"""
+    for l in block:
+        if l.strip().startswith(prefix):
+            return True
+    return False
+
+
+def format_compliance(q):
+    """格式合规检查（独立于内容一致性），确保五类题型结构正确、不会因格式跑偏而出错。
+    能拦住：填空挤在题干同行、多出/缺少 考核点、简答误用 解析、填空题缺 分数、简答题缺 正确答案 等。
+    """
+    issues = []
+    qtype = q['qtype']
+    block = q.get('block', [])
+    has_jiexi = _has_field(block, '解析')
+    has_zhengque = _has_field(block, '正确答案')
+    has_nandu = _has_field(block, '难易度')
+    has_fenshu = _has_field(block, '分数')
+    has_kaohe = _has_field(block, '考核点')
+    has_kong = any(re.match(r'^填空\d+[：:]', l.strip()) for l in block)
+
+    if qtype in ('单选题', '多选题', '判断题'):
+        if has_fenshu:
+            issues.append('题型 %s 不应含「分数」行' % qtype)
+        if has_kaohe:
+            issues.append('题型 %s 不应含「考核点」行' % qtype)
+        if not has_jiexi and not has_zhengque:
+            issues.append('缺少「解析」行')
+        if not has_nandu:
+            issues.append('缺少「难易度」行')
+    elif qtype == '填空题':
+        if not has_kong:
+            issues.append('填空题缺少「填空N」行（须每个单独一行，不可挤在题干同行）')
+        if not has_jiexi:
+            issues.append('填空题缺少「解析」行')
+        if not has_nandu:
+            issues.append('填空题缺少「难易度」行')
+        if not has_fenshu:
+            issues.append('填空题缺少「分数」行')
+        if has_kaohe:
+            issues.append('填空题不应含「考核点」行')
+        if has_zhengque:
+            issues.append('填空题不应使用「正确答案」（应为「解析」）')
+    elif qtype == '简答题':
+        if not has_zhengque:
+            issues.append('简答题缺少「正确答案」行（不能用「解析」代替）')
+        if has_jiexi:
+            issues.append('简答题不应含「解析」行（用「正确答案」）')
+        if not has_nandu:
+            issues.append('简答题缺少「难易度」行')
+        if not has_fenshu:
+            issues.append('简答题缺少「分数」行')
+        if has_kaohe:
+            issues.append('简答题不应含「考核点」行')
+    return issues
+
+
 def split_items(s):
     return [x.strip() for x in re.split(r'[、,，;；]', s) if x.strip()]
 
 
 def check(q):
-    issues = []
+    issues = format_compliance(q)  # 先跑格式合规检查，拦住结构错误
     qtype = q['qtype']
     if qtype == '填空题':
         fills = extract_fill_answers(q['tail'], q.get('block'))
