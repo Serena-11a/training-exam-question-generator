@@ -94,21 +94,12 @@ def collect_options(block, tail='', qtype=''):
       - 紧凑式（单行）/ 分行式：选项与题目同行，位于「答案括号」与「解析：」之间
       - 填空/判断/简答：无选项行
     选项文字会统一剥去行首的 "A. " / "B. " 等编号前缀，便于一致性比对。
+
+    优先级：优先从 block 多行中提取选项；若多行未收集到选项，才回退到
+    tail 同行解析（避免题干括号内无关全角括号被误判为选项，造成下标错位）。
     """
     opts = []
     expl = ''
-    # —— 同行选项（兼容旧紧凑/分行格式）——
-    if qtype in ('单选题', '多选题'):
-        m = re.search(r'[）)]\s*(.*)', tail)
-        if m:
-            seg = m.group(1).strip()
-            mj = re.search(r'解析[:：]', seg)
-            if mj:
-                seg = seg[:mj.start()].strip()
-            if seg and not seg.startswith('填空') \
-                    and not seg.startswith(('解析', '难易度', '分数', '考核点')):
-                opts = [x for x in re.split(r'\s+', seg)
-                        if x and not x.startswith(('解析', '难易度', '分数', '考核点', '填空'))]
     # —— 多行部分（当前标准：选项逐行，无前缀）——
     for l in block[1:]:
         ls = l.strip()
@@ -121,11 +112,23 @@ def collect_options(block, tail='', qtype=''):
             # 剥去行首编号前缀：A. B. C. 或 A． A、 等（兼容旧格式）
             ls2 = re.sub(r'^[A-Za-z][.．、]\s*', '', ls)
             opts.append(ls2)
-    # —— 解析文字（紧凑式常在 tail 末尾）——
-    if not expl:
-        me = re.search(r'解析[:：](.*?)(?:难易度[:：]|$)', tail)
-        if me:
-            expl = me.group(1).strip()
+    # —— 仅当多行未收集到选项时，回退到同行（紧凑/分行式）解析 ——
+    if not opts and qtype in ('单选题', '多选题'):
+        m = re.search(r'[）)]\s*(.*)', tail)
+        if m:
+            seg = m.group(1).strip()
+            mj = re.search(r'解析[:：]', seg)
+            if mj:
+                seg = seg[:mj.start()].strip()
+            if seg and not seg.startswith('填空') \
+                    and not seg.startswith(('解析', '难易度', '分数', '考核点')):
+                opts = [x for x in re.split(r'\s+', seg)
+                        if x and not x.startswith(('解析', '难易度', '分数', '考核点', '填空'))]
+        # —— 解析文字（紧凑式常在 tail 末尾）——
+        if not expl:
+            me = re.search(r'解析[:：](.*?)(?:难易度[:：]|$)', tail)
+            if me:
+                expl = me.group(1).strip()
     return opts, expl
 
 
