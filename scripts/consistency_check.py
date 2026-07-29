@@ -31,6 +31,9 @@ consistency_check.py — 题库答案/选项/解析一致性校验
     A. 答案字母越界（指向不存在的选项）
     B. 排除题("不包括/不属于/不是/错误的是")：答案选项不应出现在解析正向陈述中
     C. 非排除题：若解析中完整出现某"非答案"选项内容、而"答案"选项内容未出现 → 标记"答案与解析矛盾"
+    C2. 实体对齐（覆盖 C 的漏报）：答案选项的关键实体（书名《》内容、含·专名、英文专有词/缩写）
+        应出现在解析中；若缺失 → 标记"答案字母疑似标错"
+        （解决解析对选项文字改写——如加标点/加"作者为"——导致 C 类精确子串匹配漏报的问题，典型正是"出自/提出者"匹配题答案错标）
     D. 数字一致性：解析含数值但该数值不在任何选项中
 仅使用标准库，可在隔离 python 环境直接运行。
 """
@@ -154,6 +157,40 @@ def extract_fill_answers(tail, block=None):
                 if primary:
                     ans.append(primary)
     return ans
+
+
+def extract_entities(text):
+    """从文本抽取关键实体（用于答案-解析实体对齐检查，覆盖"出自/提出者"等匹配题）。
+
+    实体类型：书名号《》内容、含·的中文专名、英文括号内容、独立的英文专有词/缩写。
+    这些实体通常是"匹配题"（书名+作者、概念+提出者）的关键判别信息，且误报率低。
+    """
+    ents = set()
+    for m in re.findall(r'《([^》]+)》', text):
+        ents.add(m.strip())
+    for m in re.findall(r'[一-龥]+·[一-龥]+', text):
+        ents.add(m.strip())
+    for m in re.findall(r'\(([A-Za-z][A-Za-z\s.]+)\)', text):
+        ents.add(m.strip())
+    for m in re.findall(r'\b([A-Za-z]{2,}(?:\s[A-Za-z]{2,})*)\b', text):
+        if m[0].isupper() or m.isupper():
+            ents.add(m.strip())
+    return ents
+
+
+def extract_key_entities(text):
+    """强实体：仅书名号《》内容 与 含·的中文专名。
+
+    中文解析通常以原样复用中文书名与中文专名（如"芭芭拉·明托""丹尼尔·卡尼曼"），
+    而英文实体（如 Daniel Kahneman）常被音译替代，故英文实体不计入强信号，避免误报。
+    仅当强实体缺失时才报警，可精准拦住"答案字母写错"且零误报。
+    """
+    ents = set()
+    for m in re.findall(r'《([^》]+)》', text):
+        ents.add(m.strip())
+    for m in re.findall(r'[一-龥]+·[一-龥]+', text):
+        ents.add(m.strip())
+    return ents
 
 
 def letter_map(options):
@@ -299,6 +336,15 @@ def check(q):
             if missing:
                 issues.append('解析含数值 %s 但不在任何选项文字中，请核对'
                               % sorted(missing))
+        # C2. 实体对齐：答案选项的强实体（《》书名、含·中文专名）应出现在解析中；
+        #     缺失则高度疑似答案字母写错（解析改写选项文字导致 C 漏报的典型场景）。
+        #     注：英文实体（如 Daniel Kahneman）易被中文音译替代，不计入强信号，避免误报。
+        ans_entities = extract_key_entities(ans_text)
+        if ans_entities:
+            miss = [e for e in ans_entities if e not in expl]
+            if miss:
+                issues.append('答案选项关键实体 %s 未在解析中出现，疑似答案字母标错（解析描述：%s）'
+                              % (miss, expl[:36]))
     return issues
 
 
