@@ -20,7 +20,8 @@ consistency_check.py — 题库答案/选项/解析一致性校验
       选项空格分隔、与题目同行，位于答案括号与"解析："之间
     - 题干单行+字段分行式：【题型】题干（A）opt1 opt2 ……  /  解析：……  /  难易度：  /  分数：
       选项与题目同行，解析/难易度/分数各占一行
-填空题特殊：填空N：答案|备选 写在题干同行，并额外带 分数、考核点 行。
+填空题特殊：填空N：答案|备选 单独一行（像选项），并额外带 分数、考核点 行。
+简答题特殊：用 正确答案： 代替 解析：，无解析行，带 分数 行。
 
 检查项:
     A. 答案字母越界（指向不存在的选项）
@@ -124,13 +125,27 @@ def collect_options(block, tail='', qtype=''):
     return opts, expl
 
 
-def extract_fill_answers(tail):
-    """从填空题题干行提取 填空N：答案|备选 的主答案（| 之前部分）。"""
+def extract_fill_answers(tail, block=None):
+    """从填空题提取 填空N：答案|备选 的主答案（| 之前部分）。
+    兼容两种格式：
+      - 旧式：填空N 挤在题干同行 tail 中
+      - 新式：填空N 单独一行，在 block 行列表中
+    """
     ans = []
+    # 先从 tail（题干行）中提取
     for m in re.finditer(r'填空\d+[：:]\s*([^ 填空]+?)(?:\s*(?:填空\d)|$)', tail):
         primary = m.group(1).split('|')[0].strip()
         if primary:
             ans.append(primary)
+    # 再从 block 行中提取（新格式：填空N 单独一行）
+    if block:
+        for l in block[1:]:
+            ls = l.strip()
+            m = re.match(r'^填空\d+[：:]\s*(.+)$', ls)
+            if m:
+                primary = m.group(1).split('|')[0].strip()
+                if primary:
+                    ans.append(primary)
     return ans
 
 
@@ -146,7 +161,7 @@ def check(q):
     issues = []
     qtype = q['qtype']
     if qtype == '填空题':
-        fills = extract_fill_answers(q['tail'])
+        fills = extract_fill_answers(q['tail'], q.get('block'))
         expl = ''
         for l in q['block'][1:]:
             ls = l.strip()
